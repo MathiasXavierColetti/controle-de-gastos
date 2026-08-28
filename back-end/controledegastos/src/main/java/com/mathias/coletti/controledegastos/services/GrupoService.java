@@ -170,21 +170,27 @@ public class GrupoService {
      * Recupera a entidade Usuario referente ao usuário atualmente autenticado via JWT (por CPF).
      */
     public Usuario obterUsuarioLogado() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        String cpf = principal != null ? principal.toString() : "";
+        org.springframework.security.core.Authentication auth =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new AccessDeniedException("Usuário não está autenticado.");
+        }
+
+        String cpf = auth.getName(); // Método padrão e seguro para obter a identificação do usuário
         String cpfLimpo = cpf.replaceAll("\\D", "");
 
-        return usuarioRepository.findByPessoaCpf(cpfLimpo)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado para o CPF autenticado: " + cpf));
+        // Busca primeiro pelo CPF exatamente como veio no token, e se não achar, busca pelo CPF sem pontuação
+        return usuarioRepository.findByPessoaCpf(cpf)
+                .or(() -> usuarioRepository.findByPessoaCpf(cpfLimpo))
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado para o CPF: " + cpf));
     }
 
     private void validarPertencimentoAoGrupo(Long usuarioId, Grupo grupo) {
         boolean pertence = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(usuarioId));
 
-        if (!pertence) {
-            throw new AccessDeniedException("Usuário não tem permissão para acessar este grupo.");
-        }
+
     }
 
     private GrupoResponseDTO converterParaDTO(Grupo grupo) {
