@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/tipos-gasto")
+@RequestMapping("/api/v1/tipos-de-gasto")
 @RequiredArgsConstructor
 public class TipoDeGastoController {
 
@@ -34,5 +34,20 @@ public class TipoDeGastoController {
     public ResponseEntity<TipoDeGastoResponseDTO> buscarPorId(@PathVariable Long id) {
         TipoDeGastoResponseDTO response = tipoDeGastoService.buscarPorId(id);
         return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<TipoDeGastoResponseDTO> atualizar(
+            @PathVariable Long id,
+            @RequestBody @Valid TipoDeGastoCadastroDTO dto
+    ) {
+        TipoDeGastoResponseDTO response = tipoDeGastoService.atualizar(id, dto);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletar(@PathVariable Long id) {
+        tipoDeGastoService.deletar(id);
+        return ResponseEntity.noContent().build();
     }
 }

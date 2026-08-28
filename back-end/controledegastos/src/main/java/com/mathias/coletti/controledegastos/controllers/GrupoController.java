@@ -30,6 +30,27 @@ public class GrupoController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PutMapping("/{grupoId}")
+    public ResponseEntity<GrupoResponseDTO> atualizarGrupo(
+            Authentication authentication,
+            @PathVariable Long grupoId,
+            @RequestBody @Valid GrupoCriacaoDTO dto
+    ) {
+        Long usuarioAutenticadoId = (Long) authentication.getPrincipal();
+        GrupoResponseDTO response = grupoService.atualizarGrupo(usuarioAutenticadoId, grupoId, dto);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{grupoId}")
+    public ResponseEntity<Void> deletarGrupo(
+            Authentication authentication,
+            @PathVariable Long grupoId
+    ) {
+        Long usuarioAutenticadoId = (Long) authentication.getPrincipal();
+        grupoService.deletarGrupo(usuarioAutenticadoId, grupoId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{grupoId}/membros")
     public ResponseEntity<GrupoResponseDTO> adicionarMembro(
             Authentication authentication,
@@ -38,6 +59,17 @@ public class GrupoController {
     ) {
         Long usuarioAutenticadoId = (Long) authentication.getPrincipal();
         GrupoResponseDTO response = grupoService.adicionarMembroPorCpf(usuarioAutenticadoId, grupoId, dto);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{grupoId}/membros/{membroId}")
+    public ResponseEntity<GrupoResponseDTO> removerMembro(
+            Authentication authentication,
+            @PathVariable Long grupoId,
+            @PathVariable Long membroId
+    ) {
+        Long usuarioAutenticadoId = (Long) authentication.getPrincipal();
+        GrupoResponseDTO response = grupoService.removerMembro(usuarioAutenticadoId, grupoId, membroId);
         return ResponseEntity.ok(response);
     }
 
@@ -55,6 +87,12 @@ public class GrupoController {
     ) {
         Long usuarioAutenticadoId = (Long) authentication.getPrincipal();
         GrupoResponseDTO response = grupoService.buscarPorId(usuarioAutenticadoId, grupoId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/todos")
+    public ResponseEntity<List<GrupoResponseDTO>> listarTodos() {
+        List<GrupoResponseDTO> response = grupoService.listarTodos();
         return ResponseEntity.ok(response);
     }
 }

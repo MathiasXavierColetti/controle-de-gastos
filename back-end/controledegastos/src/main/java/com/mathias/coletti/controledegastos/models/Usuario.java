@@ -4,6 +4,9 @@ package com.mathias.coletti.controledegastos.models;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Entity
 @Table(name = "usuarios")
 @Getter
@@ -22,4 +25,8 @@ public class Usuario {
     @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JoinColumn(name = "pessoa_id", referencedColumnName = "id", nullable = false)
     private Pessoa pessoa;
+    // Relacionamento reverso com Grupo
+    @ManyToMany(mappedBy = "usuarios", fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<Grupo> grupos = new HashSet<>();
 }

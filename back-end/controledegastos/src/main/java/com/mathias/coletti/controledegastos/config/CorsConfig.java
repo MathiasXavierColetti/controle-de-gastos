@@ -14,6 +14,7 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+        // Permite o front-end local (Vite) e também o seu deploy no Render
         configuration.setAllowedOrigins(List.of("http://localhost:5173", "https://controle-de-gastos-15x8.onrender.com"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));

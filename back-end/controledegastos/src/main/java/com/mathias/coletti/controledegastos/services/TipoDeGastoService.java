@@ -45,4 +45,31 @@ public class TipoDeGastoService {
 
         return new TipoDeGastoResponseDTO(tipo.getId(), tipo.getNome());
     }
+
+    @Transactional
+    public TipoDeGastoResponseDTO atualizar(Long id, TipoDeGastoCadastroDTO dto) {
+        TipoDeGasto tipo = tipoDeGastoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada com o ID: " + id));
+
+        if (tipoDeGastoRepository.existsByNomeIgnoreCase(dto.nome()) && !tipo.getNome().equalsIgnoreCase(dto.nome())) {
+            throw new BusinessException("Já existe outra categoria cadastrada com este nome.");
+        }
+
+        tipo.setNome(dto.nome());
+        tipo = tipoDeGastoRepository.save(tipo);
+
+        return new TipoDeGastoResponseDTO(tipo.getId(), tipo.getNome());
+    }
+
+    @Transactional
+    public void deletar(Long id) {
+        if (!tipoDeGastoRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Categoria não encontrada com o ID: " + id);
+        }
+        try {
+            tipoDeGastoRepository.deleteById(id);
+        } catch (Exception e) {
+            throw new BusinessException("Não é possível excluir esta categoria pois ela está vinculada a lançamentos existentes.");
+        }
+    }
 }

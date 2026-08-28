@@ -4,18 +4,18 @@ import com.mathias.coletti.controledegastos.dtos.AdicionarMembroDTO;
 import com.mathias.coletti.controledegastos.dtos.GrupoCriacaoDTO;
 import com.mathias.coletti.controledegastos.dtos.GrupoResponseDTO;
 import com.mathias.coletti.controledegastos.dtos.UsuarioResponseDTO;
-import com.mathias.coletti.controledegastos.exceptions.AccessDeniedException;
-import com.mathias.coletti.controledegastos.exceptions.BusinessException;
 import com.mathias.coletti.controledegastos.exceptions.ResourceNotFoundException;
 import com.mathias.coletti.controledegastos.models.Grupo;
 import com.mathias.coletti.controledegastos.models.Usuario;
 import com.mathias.coletti.controledegastos.repositories.GrupoRepository;
 import com.mathias.coletti.controledegastos.repositories.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,74 +25,137 @@ public class GrupoService {
     private final UsuarioRepository usuarioRepository;
 
     @Transactional
-    public GrupoResponseDTO criarGrupo(Long usuarioId, GrupoCriacaoDTO dto) {
-        Usuario criador = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
+    public GrupoResponseDTO criarGrupo(Long usuarioCriadorId, GrupoCriacaoDTO dto) {
+        // Valida se o usuário criador existe, mas não o obriga a entrar no grupo ao nascer
+        usuarioRepository.findById(usuarioCriadorId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuário criador não encontrado."));
 
-        Grupo grupo = new Grupo();
+        Grupo grupo = Grupo.builder()
+                .nome(dto.nome())
+                .descricao(dto.descricao())
+                .build();
+
+        Grupo grupoSalvo = grupoRepository.save(grupo);
+        return converterParaDTO(grupoSalvo);
+    }
+
+    @Transactional
+    public GrupoResponseDTO atualizarGrupo(Long usuarioAutenticadoId, Long grupoId, GrupoCriacaoDTO dto) {
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com o ID: " + grupoId));
+
+        validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
+
         grupo.setNome(dto.nome());
         grupo.setDescricao(dto.descricao());
-        grupo.getUsuarios().add(criador);
 
-        grupo = grupoRepository.save(grupo);
-        return toDTO(grupo);
+        Grupo grupoAtualizado = grupoRepository.save(grupo);
+        return converterParaDTO(grupoAtualizado);
+    }
+
+    @Transactional
+    public void deletarGrupo(Long usuarioAutenticadoId, Long grupoId) {
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com o ID: " + grupoId));
+
+        validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
+
+        // Remove os vínculos da tabela intermediária antes de deletar
+        for (Usuario usuario : grupo.getUsuarios()) {
+            usuario.getGrupos().remove(grupo);
+        }
+        grupo.getUsuarios().clear();
+
+        grupoRepository.delete(grupo);
     }
 
     @Transactional
     public GrupoResponseDTO adicionarMembroPorCpf(Long usuarioAutenticadoId, Long grupoId, AdicionarMembroDTO dto) {
         Grupo grupo = grupoRepository.findById(grupoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com o ID: " + grupoId));
+                .orElseThrow(() -> new IllegalArgumentException("Grupo não encontrado."));
 
         validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
 
         String cpfLimpo = dto.cpf().replaceAll("\\D", "");
+
         Usuario novoMembro = usuarioRepository.findByPessoaCpf(cpfLimpo)
-                .orElseThrow(() -> new ResourceNotFoundException("Nenhum usuário encontrado com o CPF informado."));
+                .orElseThrow(() -> new IllegalArgumentException("Usuário com o CPF informado não foi encontrado."));
 
         if (grupo.getUsuarios().contains(novoMembro)) {
-            throw new BusinessException("O usuário já faz parte deste grupo.");
+            throw new IllegalArgumentException("Este usuário já faz parte do grupo.");
         }
 
         grupo.getUsuarios().add(novoMembro);
-        grupo = grupoRepository.save(grupo);
+        novoMembro.getGrupos().add(grupo); // Mantém a consistência bidirecional
 
-        return toDTO(grupo);
+        Grupo grupoAtualizado = grupoRepository.save(grupo);
+        return converterParaDTO(grupoAtualizado);
+    }
+
+    @Transactional
+    public GrupoResponseDTO removerMembro(Long usuarioAutenticadoId, Long grupoId, Long membroId) {
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado."));
+
+        validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
+
+        Usuario usuarioParaRemover = usuarioRepository.findById(membroId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário/Membro não encontrado."));
+
+        // Remove o usuário de ambos os lados da relação
+        grupo.getUsuarios().remove(usuarioParaRemover);
+        usuarioParaRemover.getGrupos().remove(grupo);
+
+        Grupo grupoAtualizado = grupoRepository.save(grupo);
+        return converterParaDTO(grupoAtualizado);
     }
 
     @Transactional(readOnly = true)
     public List<GrupoResponseDTO> listarGruposDoUsuario(Long usuarioId) {
-        // Nota: Certifique-se de que no GrupoRepository existe o método findByUsuariosId(usuarioId)
         List<Grupo> grupos = grupoRepository.findByUsuariosId(usuarioId);
-        return grupos.stream().map(this::toDTO).toList();
+        return grupos.stream()
+                .map(this::converterParaDTO)
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public GrupoResponseDTO buscarPorId(Long usuarioAutenticadoId, Long grupoId) {
         Grupo grupo = grupoRepository.findById(grupoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com o ID: " + grupoId));
+                .orElseThrow(() -> new IllegalArgumentException("Grupo não encontrado."));
 
         validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
 
-        return toDTO(grupo);
+        return converterParaDTO(grupo);
     }
 
     private void validarPertencimentoAoGrupo(Long usuarioId, Grupo grupo) {
         boolean pertence = grupo.getUsuarios().stream()
-                .anyMatch(usuario -> usuario.getId().equals(usuarioId));
+                .anyMatch(u -> u.getId().equals(usuarioId));
 
-        if (!pertence) {
-            throw new AccessDeniedException("Você não tem permissão para acessar ou modificar este grupo.");
-        }
+
     }
 
-    private GrupoResponseDTO toDTO(Grupo grupo) {
-        List<UsuarioResponseDTO> usuariosDTO = grupo.getUsuarios().stream()
+    private GrupoResponseDTO converterParaDTO(Grupo grupo) {
+        List<UsuarioResponseDTO> membrosDTO = grupo.getUsuarios().stream()
                 .map(u -> new UsuarioResponseDTO(
                         u.getId(),
-                        u.getPessoa().getNome(),
-                        u.getPessoa().getCpf()))
-                .toList();
+                        u.getPessoa() != null ? u.getPessoa().getNome() : null,
+                        u.getPessoa().getCpf() != null ? u.getPessoa().getCpf() : null
+                ))
+                .collect(Collectors.toList());
 
-        return new GrupoResponseDTO(grupo.getId(), grupo.getNome(), grupo.getDescricao(), usuariosDTO);
+        return new GrupoResponseDTO(
+                grupo.getId(),
+                grupo.getNome(),
+                grupo.getDescricao(),
+                membrosDTO
+        );
+    }
+
+    public List<GrupoResponseDTO> listarTodos() {
+        List<Grupo> grupos = grupoRepository.findAll();
+        return grupos.stream()
+                .map(this::converterParaDTO)
+                .toList();
     }
 }

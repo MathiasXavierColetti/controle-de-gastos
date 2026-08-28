@@ -1,5 +1,6 @@
 package com.mathias.coletti.controledegastos.services;
 
+import com.mathias.coletti.controledegastos.dtos.UsuarioAtualizacaoDTO;
 import com.mathias.coletti.controledegastos.dtos.UsuarioCadastroDTO;
 import com.mathias.coletti.controledegastos.dtos.UsuarioResponseDTO;
 import com.mathias.coletti.controledegastos.exceptions.BusinessException;
@@ -8,10 +9,15 @@ import com.mathias.coletti.controledegastos.models.Pessoa;
 import com.mathias.coletti.controledegastos.models.Usuario;
 import com.mathias.coletti.controledegastos.repositories.PessoaRepository;
 import com.mathias.coletti.controledegastos.repositories.UsuarioRepository;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +56,17 @@ public class UsuarioService {
     }
 
     @Transactional(readOnly = true)
+    public List<UsuarioResponseDTO> listarTodos() {
+        return usuarioRepository.findAll().stream()
+                .map(usuario -> new UsuarioResponseDTO(
+                        usuario.getId(),
+                        usuario.getPessoa().getNome(),
+                        usuario.getPessoa().getCpf()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public UsuarioResponseDTO buscarPorId(Long id) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado com o ID: " + id));
@@ -59,5 +76,51 @@ public class UsuarioService {
                 usuario.getPessoa().getNome(),
                 usuario.getPessoa().getCpf()
         );
+    }
+
+    @Transactional
+    public UsuarioResponseDTO atualizar(Long id, @NotNull UsuarioAtualizacaoDTO dto) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Usuário não encontrado."));
+
+        // Atualiza nome e cpf através do objeto Pessoa relacionado
+        if (dto.nome() != null && !dto.nome().isBlank()) {
+            usuario.getPessoa().setNome(dto.nome());
+        }
+
+        if (dto.usuario() != null && !dto.usuario().isBlank()) {
+            usuario.getPessoa().setCpf(dto.usuario());
+        }
+
+        // Lógica para alterar a senha (se preenchida)
+        if (dto.novaSenha() != null && !dto.novaSenha().isBlank()) {
+            if (dto.senhaAtual() == null || !passwordEncoder.matches(dto.senhaAtual(), usuario.getSenha())) {
+                throw new BusinessException("A senha atual está incorreta.");
+            }
+            if (dto.novaSenha().length() < 6) {
+                throw new BusinessException("A nova senha deve ter no mínimo 6 caracteres.");
+            }
+            usuario.setSenha(passwordEncoder.encode(dto.novaSenha()));
+        }
+
+        usuarioRepository.save(usuario);
+        return new UsuarioResponseDTO(
+                usuario.getId(),
+                usuario.getPessoa().getNome(),
+                usuario.getPessoa().getCpf()
+        );
+    }
+
+    @Transactional
+    public void deletar(Long id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado com o ID: " + id));
+
+        Pessoa pessoa = usuario.getPessoa();
+
+        usuarioRepository.delete(usuario);
+        if (pessoa != null) {
+            pessoaRepository.delete(pessoa);
+        }
     }
 }
