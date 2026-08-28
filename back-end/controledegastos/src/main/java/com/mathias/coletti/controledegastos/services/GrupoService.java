@@ -16,6 +16,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -26,15 +28,32 @@ public class GrupoService {
     private final GrupoRepository grupoRepository;
     private final UsuarioRepository usuarioRepository;
 
+    /**
+     * Cria um novo grupo utilizando o usuário logado na sessão como criador.
+     */
+    @Transactional
+    public GrupoResponseDTO criarGrupo(GrupoCriacaoDTO dto) {
+        Usuario criador = obterUsuarioLogado();
+        return criarGrupo(criador.getId(), dto);
+    }
+
+    /**
+     * Cria um grupo associando o usuário criador.
+     */
     @Transactional
     public GrupoResponseDTO criarGrupo(Long usuarioCriadorId, GrupoCriacaoDTO dto) {
-        usuarioRepository.findById(usuarioCriadorId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuário criador não encontrado."));
+        Usuario criador = usuarioRepository.findById(usuarioCriadorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário criador não encontrado com ID: " + usuarioCriadorId));
 
         Grupo grupo = Grupo.builder()
                 .nome(dto.nome())
                 .descricao(dto.descricao())
+                .usuarios(new HashSet<>())
                 .build();
+
+        // Adiciona o criador à lista de usuários do grupo
+        grupo.getUsuarios().add(criador);
+        criador.getGrupos().add(grupo);
 
         Grupo grupoSalvo = grupoRepository.save(grupo);
         return converterParaDTO(grupoSalvo);
@@ -73,14 +92,14 @@ public class GrupoService {
     @Transactional
     public GrupoResponseDTO adicionarMembroPorCpf(Long usuarioAutenticadoId, Long grupoId, AdicionarMembroDTO dto) {
         Grupo grupo = grupoRepository.findById(grupoId)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo não encontrado."));
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com o ID: " + grupoId));
 
         validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
 
         String cpfLimpo = dto.cpf().replaceAll("\\D", "");
 
         Usuario novoMembro = usuarioRepository.findByPessoaCpf(cpfLimpo)
-                .orElseThrow(() -> new IllegalArgumentException("Usuário com o CPF informado não foi encontrado."));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário com o CPF informado não foi encontrado."));
 
         if (grupo.getUsuarios().contains(novoMembro)) {
             throw new IllegalArgumentException("Este usuário já faz parte do grupo.");
@@ -121,7 +140,7 @@ public class GrupoService {
     @Transactional(readOnly = true)
     public GrupoResponseDTO buscarPorId(Long usuarioAutenticadoId, Long grupoId) {
         Grupo grupo = grupoRepository.findById(grupoId)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo não encontrado."));
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com o ID: " + grupoId));
 
         validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
 
@@ -130,10 +149,7 @@ public class GrupoService {
 
     @Transactional(readOnly = true)
     public List<GrupoResponseDTO> listarGruposDoUsuarioLogado() {
-        String cpfUsuario = SecurityContextHolder.getContext().getAuthentication().getName();
-
-        Usuario usuario = usuarioRepository.findByPessoaCpf(cpfUsuario)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado para o CPF informado."));
+        Usuario usuario = obterUsuarioLogado();
 
         List<Grupo> grupos = grupoRepository.findByUsuariosId(usuario.getId());
 
@@ -142,11 +158,24 @@ public class GrupoService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<GrupoResponseDTO> listarTodos() {
         List<Grupo> grupos = grupoRepository.findAll();
         return grupos.stream()
                 .map(this::converterParaDTO)
                 .toList();
+    }
+
+    /**
+     * Recupera a entidade Usuario referente ao usuário atualmente autenticado via JWT (por CPF).
+     */
+    public Usuario obterUsuarioLogado() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String cpf = principal != null ? principal.toString() : "";
+        String cpfLimpo = cpf.replaceAll("\\D", "");
+
+        return usuarioRepository.findByPessoaCpf(cpfLimpo)
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado para o CPF autenticado: " + cpf));
     }
 
     private void validarPertencimentoAoGrupo(Long usuarioId, Grupo grupo) {
