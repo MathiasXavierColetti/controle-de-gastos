@@ -7,6 +7,7 @@ import Grupos from './components/Grupos';
 import Vinculos from './components/Vinculos';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import TipoDeGasto from "./components/TipoDeGasto.jsx";
+import Gastos from "./pages/Gastos.jsx";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="/pessoas" element={<Pessoas />} />
             <Route path="/grupos" element={<Grupos />} />
             <Route path="/tipo-de-gastos" element={<TipoDeGasto />} />
+            <Route path="/gastos" element={<Gastos />} />
         </Routes>
       </Router>
   );

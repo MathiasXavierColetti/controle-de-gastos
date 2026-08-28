@@ -95,4 +95,9 @@ public class GrupoController {
         List<GrupoResponseDTO> response = grupoService.listarTodos();
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/meus")
+    public ResponseEntity<List<GrupoResponseDTO>> listarMeusGrupos() {
+        List<GrupoResponseDTO> response = grupoService.listarGruposDoUsuarioLogado();
+        return ResponseEntity.ok(response);
+    }
 }

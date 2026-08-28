@@ -3,24 +3,33 @@ package com.mathias.coletti.controledegastos.dtos;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record GastoCadastroDTO(
-        @NotBlank(message = "A descrição do gasto é obrigatória")
-        String descricao,
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class GastoCadastroDTO {
 
-        @NotNull(message = "O valor é obrigatório")
-        @Positive(message = "O valor do gasto deve ser maior que zero")
-        BigDecimal valor,
+        @NotBlank(message = "A descrição do gasto é obrigatória.")
+        private String descricao;
 
-        @NotNull(message = "A data do gasto é obrigatória")
-        LocalDate data,
+        @NotNull(message = "O valor do gasto é obrigatório.")
+        @Positive(message = "O valor do gasto deve ser maior que zero.")
+        private BigDecimal valor;
 
-        @NotNull(message = "O ID do tipo de gasto é obrigatório")
-        Long tipoDeGastoId,
+        @NotNull(message = "A data do gasto é obrigatória.")
+        private LocalDate data;
 
-        @NotNull(message = "O ID do grupo é obrigatório")
-        Long grupoId
-) {}
+        @NotNull(message = "O tipo de gasto é obrigatório.")
+        private Long tipoDeGastoId;
+
+        @NotNull(message = "O grupo é obrigatório.")
+        private Long grupoId;
+}

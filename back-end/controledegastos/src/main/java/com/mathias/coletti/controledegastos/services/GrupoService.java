@@ -9,8 +9,10 @@ import com.mathias.coletti.controledegastos.models.Grupo;
 import com.mathias.coletti.controledegastos.models.Usuario;
 import com.mathias.coletti.controledegastos.repositories.GrupoRepository;
 import com.mathias.coletti.controledegastos.repositories.UsuarioRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +28,6 @@ public class GrupoService {
 
     @Transactional
     public GrupoResponseDTO criarGrupo(Long usuarioCriadorId, GrupoCriacaoDTO dto) {
-        // Valida se o usuário criador existe, mas não o obriga a entrar no grupo ao nascer
         usuarioRepository.findById(usuarioCriadorId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuário criador não encontrado."));
 
@@ -102,7 +103,6 @@ public class GrupoService {
         Usuario usuarioParaRemover = usuarioRepository.findById(membroId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário/Membro não encontrado."));
 
-        // Remove o usuário de ambos os lados da relação
         grupo.getUsuarios().remove(usuarioParaRemover);
         usuarioParaRemover.getGrupos().remove(grupo);
 
@@ -128,11 +128,34 @@ public class GrupoService {
         return converterParaDTO(grupo);
     }
 
+    @Transactional(readOnly = true)
+    public List<GrupoResponseDTO> listarGruposDoUsuarioLogado() {
+        String cpfUsuario = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        Usuario usuario = usuarioRepository.findByPessoaCpf(cpfUsuario)
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado para o CPF informado."));
+
+        List<Grupo> grupos = grupoRepository.findByUsuariosId(usuario.getId());
+
+        return grupos.stream()
+                .map(this::converterParaDTO)
+                .toList();
+    }
+
+    public List<GrupoResponseDTO> listarTodos() {
+        List<Grupo> grupos = grupoRepository.findAll();
+        return grupos.stream()
+                .map(this::converterParaDTO)
+                .toList();
+    }
+
     private void validarPertencimentoAoGrupo(Long usuarioId, Grupo grupo) {
         boolean pertence = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(usuarioId));
 
-
+        if (!pertence) {
+            throw new AccessDeniedException("Usuário não tem permissão para acessar este grupo.");
+        }
     }
 
     private GrupoResponseDTO converterParaDTO(Grupo grupo) {
@@ -140,7 +163,7 @@ public class GrupoService {
                 .map(u -> new UsuarioResponseDTO(
                         u.getId(),
                         u.getPessoa() != null ? u.getPessoa().getNome() : null,
-                        u.getPessoa().getCpf() != null ? u.getPessoa().getCpf() : null
+                        u.getPessoa() != null ? u.getPessoa().getCpf() : null
                 ))
                 .collect(Collectors.toList());
 
@@ -150,12 +173,5 @@ public class GrupoService {
                 grupo.getDescricao(),
                 membrosDTO
         );
-    }
-
-    public List<GrupoResponseDTO> listarTodos() {
-        List<Grupo> grupos = grupoRepository.findAll();
-        return grupos.stream()
-                .map(this::converterParaDTO)
-                .toList();
     }
 }

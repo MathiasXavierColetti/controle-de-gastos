@@ -64,4 +64,15 @@ public class JwtTokenProvider {
             return false;
         }
     }
+
+    // Extrai o CPF guardado na claim "cpf" dentro do token
+    public String getCpfDoToken(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        return claims.get("cpf", String.class);
+    }
 }

@@ -1,7 +1,8 @@
 package com.mathias.coletti.controledegastos.services;
 
-import com.mathias.coletti.controledegastos.dtos.GastoCadastroDTO;
+import com.mathias.coletti.controledegastos.dtos.GastoRequestDTO;
 import com.mathias.coletti.controledegastos.dtos.GastoResponseDTO;
+import com.mathias.coletti.controledegastos.exceptions.ResourceNotFoundException;
 import com.mathias.coletti.controledegastos.models.Gasto;
 import com.mathias.coletti.controledegastos.models.Grupo;
 import com.mathias.coletti.controledegastos.models.TipoDeGasto;
@@ -10,11 +11,9 @@ import com.mathias.coletti.controledegastos.repositories.GastoRepository;
 import com.mathias.coletti.controledegastos.repositories.GrupoRepository;
 import com.mathias.coletti.controledegastos.repositories.TipoDeGastoRepository;
 import com.mathias.coletti.controledegastos.repositories.UsuarioRepository;
-import com.mathias.coletti.controledegastos.repositories.projections.RelatorioCategoriaProjection;
-import com.mathias.coletti.controledegastos.repositories.projections.RelatorioDetalhadoProjection;
-import com.mathias.coletti.controledegastos.repositories.projections.RelatorioPessoaProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,116 +25,125 @@ import java.util.List;
 public class GastoService {
 
     private final GastoRepository gastoRepository;
-    private final GrupoRepository grupoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final GrupoRepository grupoRepository;
     private final TipoDeGastoRepository tipoDeGastoRepository;
 
-    @Transactional
-    public GastoResponseDTO cadastrar(Long usuarioAutenticadoId, GastoCadastroDTO dto) {
-        // 1. Busca e valida se o grupo existe e se o usuário pertence a ele
-        Grupo grupo = buscarEValidarGrupo(usuarioAutenticadoId, dto.grupoId());
+    private Usuario getUsuarioLogado() {
+        // Puxa o CPF que foi gravado na sessão do Spring Security pelo filtro
+        String cpfSessao = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        // 2. Busca o usuário pagador
-        Usuario usuario = usuarioRepository.findById(usuarioAutenticadoId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+        String cpfLimpo = (cpfSessao != null) ? cpfSessao.replaceAll("\\D", "") : "";
 
-        // 3. Busca a categoria (TipoDeGasto)
-        TipoDeGasto tipoDeGasto = tipoDeGastoRepository.findById(dto.tipoDeGastoId())
-                .orElseThrow(() -> new IllegalArgumentException("Tipo de gasto não encontrado."));
-
-        // 4. Monta e persiste o gasto
-        Gasto gasto = Gasto.builder()
-                .descricao(dto.descricao())
-                .valor(dto.valor())
-                .data(dto.data())
-                .grupo(grupo)
-                .usuario(usuario)
-                .tipoDeGasto(tipoDeGasto)
-                .build();
-
-        Gasto salvo = gastoRepository.save(gasto);
-
-        return converterParaDTO(salvo);
+        return usuarioRepository.findByPessoaCpf(cpfLimpo)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado para o CPF: " + cpfLimpo));
     }
 
     @Transactional(readOnly = true)
-    public List<GastoResponseDTO> buscarPorGrupoEPeriodo(
-            Long usuarioAutenticadoId,
-            Long grupoId,
-            LocalDate inicio,
-            LocalDate fim
-    ) {
-        buscarEValidarGrupo(usuarioAutenticadoId, grupoId);
+    public List<GastoResponseDTO> buscarRelatorio(Long grupoId, LocalDate inicio, LocalDate fim, Long tipoDeGastoId) {
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com ID: " + grupoId));
 
-        return gastoRepository.findByGrupoIdAndDataBetweenOrderByDataDesc(grupoId, inicio, fim)
-                .stream()
+        Usuario usuarioLogado = getUsuarioLogado();
+        validarPertencimentoAoGrupo(usuarioLogado.getId(), grupo);
+
+        List<Gasto> gastos = gastoRepository.filtrarGastos(grupoId, inicio, fim, tipoDeGastoId);
+
+        return gastos.stream()
                 .map(this::converterParaDTO)
                 .toList();
     }
 
-    // --- RELATÓRIOS ---
+    @Transactional
+    public GastoResponseDTO criar(GastoRequestDTO dto) {
+        Usuario usuarioLogado = getUsuarioLogado();
 
-    @Transactional(readOnly = true)
-    public List<RelatorioCategoriaProjection> obterRelatorioPorCategoria(
-            Long usuarioAutenticadoId,
-            Long grupoId,
-            LocalDate inicio,
-            LocalDate fim
-    ) {
-        buscarEValidarGrupo(usuarioAutenticadoId, grupoId);
-        return gastoRepository.relatorioPorCategoria(grupoId, inicio, fim);
+        Grupo grupo = grupoRepository.findById(dto.getGrupoId())
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado."));
+
+        validarPertencimentoAoGrupo(usuarioLogado.getId(), grupo);
+
+        TipoDeGasto tipoDeGasto = tipoDeGastoRepository.findById(dto.getTipoDeGastoId())
+                .orElseThrow(() -> new ResourceNotFoundException("Tipo de Gasto não encontrado."));
+
+        Gasto gasto = Gasto.builder()
+                .descricao(dto.getDescricao())
+                .valor(dto.getValor())
+                .data(dto.getData() != null ? dto.getData() : LocalDate.now())
+                .grupo(grupo)
+                .tipoDeGasto(tipoDeGasto)
+                .usuario(usuarioLogado)
+                .build();
+
+        Gasto salvo = gastoRepository.save(gasto);
+        return converterParaDTO(salvo);
     }
 
-    @Transactional(readOnly = true)
-    public List<RelatorioPessoaProjection> obterRelatorioPorPessoa(
-            Long usuarioAutenticadoId,
-            Long grupoId,
-            LocalDate inicio,
-            LocalDate fim
-    ) {
-        buscarEValidarGrupo(usuarioAutenticadoId, grupoId);
-        return gastoRepository.relatorioPorPessoa(grupoId, inicio, fim);
+    @Transactional
+    public GastoResponseDTO atualizar(Long id, GastoRequestDTO dto) {
+        Usuario usuarioLogado = getUsuarioLogado();
+
+        Gasto gasto = gastoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Gasto não encontrado com ID: " + id));
+
+        validarPertencimentoAoGrupo(usuarioLogado.getId(), gasto.getGrupo());
+
+        Grupo grupo = grupoRepository.findById(dto.getGrupoId())
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado."));
+
+        validarPertencimentoAoGrupo(usuarioLogado.getId(), grupo);
+
+        TipoDeGasto tipoDeGasto = tipoDeGastoRepository.findById(dto.getTipoDeGastoId())
+                .orElseThrow(() -> new ResourceNotFoundException("Tipo de Gasto não encontrado."));
+
+        gasto.setDescricao(dto.getDescricao());
+        gasto.setValor(dto.getValor());
+        gasto.setData(dto.getData() != null ? dto.getData() : gasto.getData());
+        gasto.setGrupo(grupo);
+        gasto.setTipoDeGasto(tipoDeGasto);
+
+        Gasto atualizado = gastoRepository.save(gasto);
+        return converterParaDTO(atualizado);
     }
 
-    @Transactional(readOnly = true)
-    public List<RelatorioDetalhadoProjection> obterRelatorioPorPessoaECategoria(
-            Long usuarioAutenticadoId,
-            Long grupoId,
-            LocalDate inicio,
-            LocalDate fim
-    ) {
-        buscarEValidarGrupo(usuarioAutenticadoId, grupoId);
-        return gastoRepository.relatorioPorPessoaECategoria(grupoId, inicio, fim);
+    @Transactional
+    public void excluir(Long id) {
+        Usuario usuarioLogado = getUsuarioLogado();
+
+        Gasto gasto = gastoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Gasto não encontrado para exclusão."));
+
+        validarPertencimentoAoGrupo(usuarioLogado.getId(), gasto.getGrupo());
+
+        gastoRepository.delete(gasto);
     }
 
-    // --- MÉTODOS AUXILIARES ---
-
-    private Grupo buscarEValidarGrupo(Long usuarioId, Long grupoId) {
-        Grupo grupo = grupoRepository.findById(grupoId)
-                .orElseThrow(() -> new IllegalArgumentException("Grupo não encontrado."));
-
+    private void validarPertencimentoAoGrupo(Long usuarioId, Grupo grupo) {
         boolean pertence = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(usuarioId));
 
         if (!pertence) {
-            throw new AccessDeniedException("Acesso negado: Você não faz parte deste grupo.");
+            throw new AccessDeniedException("Usuário não possui acesso ao grupo informado.");
         }
-
-        return grupo;
     }
 
     private GastoResponseDTO converterParaDTO(Gasto gasto) {
+        String nomeUsuario = (gasto.getUsuario() != null && gasto.getUsuario().getPessoa() != null)
+                ? gasto.getUsuario().getPessoa().getNome()
+                : "Não informado";
+
         return new GastoResponseDTO(
                 gasto.getId(),
                 gasto.getDescricao(),
                 gasto.getValor(),
                 gasto.getData(),
-                gasto.getTipoDeGasto().getId(),
-                gasto.getTipoDeGasto().getNome(),
-                gasto.getUsuario().getId(),
-                gasto.getUsuario().getPessoa().getNome(),
-                gasto.getGrupo().getId(),
-                gasto.getGrupo().getNome()
+                gasto.getGrupo() != null ? gasto.getGrupo().getId() : null,
+                gasto.getGrupo() != null ? gasto.getGrupo().getNome() : null,
+                gasto.getTipoDeGasto() != null ? gasto.getTipoDeGasto().getId() : null,
+                gasto.getTipoDeGasto() != null ? gasto.getTipoDeGasto().getNome() : "Outros",
+                nomeUsuario
         );
     }
+
+
 }

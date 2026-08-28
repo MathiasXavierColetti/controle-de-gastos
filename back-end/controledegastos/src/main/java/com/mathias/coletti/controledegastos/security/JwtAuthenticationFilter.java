@@ -31,11 +31,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = obterTokenDaRequisicao(request);
 
         if (StringUtils.hasText(token) && tokenProvider.validarToken(token)) {
-            Long usuarioId = tokenProvider.getUsuarioIdDoToken(token);
+            // Extrai o CPF contido na claim "cpf" do token
+            String cpf = tokenProvider.getCpfDoToken(token);
 
-            // Armazena o ID do usuário logado como principal do Spring Security
+            // Armazena o CPF do usuário no contexto de segurança da sessão
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(usuarioId, null, Collections.emptyList());
+                    new UsernamePasswordAuthenticationToken(cpf, null, Collections.emptyList());
 
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 

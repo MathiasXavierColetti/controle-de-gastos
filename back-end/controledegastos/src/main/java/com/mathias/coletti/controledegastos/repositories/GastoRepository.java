@@ -1,9 +1,6 @@
 package com.mathias.coletti.controledegastos.repositories;
 
 import com.mathias.coletti.controledegastos.models.Gasto;
-import com.mathias.coletti.controledegastos.repositories.projections.RelatorioCategoriaProjection;
-import com.mathias.coletti.controledegastos.repositories.projections.RelatorioDetalhadoProjection;
-import com.mathias.coletti.controledegastos.repositories.projections.RelatorioPessoaProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,44 +9,34 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 
-
 @Repository
 public interface GastoRepository extends JpaRepository<Gasto, Long> {
 
-    // 1. Relatório por Categoria no Período
-    @Query("SELECT g.tipoDeGasto.nome AS categoria, SUM(g.valor) AS total " +
-            "FROM Gasto g " +
-            "WHERE g.grupo.id = :grupoId AND g.data BETWEEN :inicio AND :fim " +
-            "GROUP BY g.tipoDeGasto.nome " +
-            "ORDER BY total DESC")
-    List<RelatorioCategoriaProjection> relatorioPorCategoria(
-            @Param("grupoId") Long grupoId,
-            @Param("inicio") LocalDate inicio,
-            @Param("fim") LocalDate fim
-    );
-    List<Gasto> findByGrupoIdAndDataBetweenOrderByDataDesc(Long grupoId, LocalDate inicio, LocalDate fim);
+    List<Gasto> findByGrupoId(Long grupoId);
 
-    // 2. Relatório por Pessoa no Período
-    @Query("SELECT g.usuario.pessoa.nome AS nomePessoa, SUM(g.valor) AS total " +
-            "FROM Gasto g " +
-            "WHERE g.grupo.id = :grupoId AND g.data BETWEEN :inicio AND :fim " +
-            "GROUP BY g.usuario.pessoa.nome " +
-            "ORDER BY total DESC")
-    List<RelatorioPessoaProjection> relatorioPorPessoa(
+    @Query("SELECT g FROM Gasto g WHERE g.grupo.id = :grupoId AND g.data BETWEEN :inicio AND :fim")
+    List<Gasto> findByGrupoAndPeriodo(
             @Param("grupoId") Long grupoId,
             @Param("inicio") LocalDate inicio,
             @Param("fim") LocalDate fim
     );
 
-    // 3. Relatório Cruzado: Quanto cada pessoa gastou em cada categoria no período
-    @Query("SELECT g.usuario.pessoa.nome AS nomePessoa, g.tipoDeGasto.nome AS categoria, SUM(g.valor) AS total " +
-            "FROM Gasto g " +
-            "WHERE g.grupo.id = :grupoId AND g.data BETWEEN :inicio AND :fim " +
-            "GROUP BY g.usuario.pessoa.nome, g.tipoDeGasto.nome " +
-            "ORDER BY g.usuario.pessoa.nome ASC, total DESC")
-    List<RelatorioDetalhadoProjection> relatorioPorPessoaECategoria(
+    @Query("SELECT g FROM Gasto g WHERE g.grupo.id = :grupoId AND g.tipoDeGasto.id = :tipoDeGastoId AND g.data BETWEEN :inicio AND :fim")
+    List<Gasto> findByGrupoAndTipoAndPeriodo(
             @Param("grupoId") Long grupoId,
+            @Param("tipoDeGastoId") Long tipoDeGastoId,
             @Param("inicio") LocalDate inicio,
             @Param("fim") LocalDate fim
+    );
+
+    @Query("SELECT g FROM Gasto g WHERE (:grupoId IS NULL OR g.grupo.id = :grupoId) " +
+            "AND (:inicio IS NULL OR g.data >= :inicio) " +
+            "AND (:fim IS NULL OR g.data <= :fim) " +
+            "AND (:tipoDeGastoId IS NULL OR g.tipoDeGasto.id = :tipoDeGastoId)")
+    List<Gasto> filtrarGastos(
+            @Param("grupoId") Long grupoId,
+            @Param("inicio") LocalDate inicio,
+            @Param("fim") LocalDate fim,
+            @Param("tipoDeGastoId") Long tipoDeGastoId
     );
 }
