@@ -2,6 +2,7 @@ package com.mathias.coletti.controledegastos.controllers;
 
 import com.mathias.coletti.controledegastos.dtos.GastoRequestDTO;
 import com.mathias.coletti.controledegastos.dtos.GastoResponseDTO;
+import com.mathias.coletti.controledegastos.dtos.RelatorioGastoUsuarioDTO;
 import com.mathias.coletti.controledegastos.services.GastoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -59,5 +60,16 @@ public class GastoController {
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
         gastoService.excluir(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/relatorio-pizza")
+    public ResponseEntity<List<RelatorioGastoUsuarioDTO>> obterRelatorioPizza(
+            @RequestParam Long grupoId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim,
+            @RequestParam(required = false) Long tipoDeGastoId
+    ) {
+        List<RelatorioGastoUsuarioDTO> relatorio = gastoService.obterRelatorioPizza(grupoId, inicio, fim, tipoDeGastoId);
+        return ResponseEntity.ok(relatorio);
     }
 }

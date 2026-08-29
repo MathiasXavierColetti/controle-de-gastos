@@ -20,6 +20,11 @@ public class GrupoController {
 
     private final GrupoService grupoService;
 
+    @GetMapping
+    public ResponseEntity<List<GrupoResponseDTO>> listarTodosGrupos() {
+        return ResponseEntity.ok(grupoService.listarTodos());
+    }
+
     @PostMapping
     public ResponseEntity<GrupoResponseDTO> criarGrupo(@RequestBody @Valid GrupoCriacaoDTO dto) {
         GrupoResponseDTO response = grupoService.criarGrupo(dto);
@@ -32,14 +37,12 @@ public class GrupoController {
         return ResponseEntity.ok(response);
     }
 
-    // Mapeamento específico para a rota /todos
     @GetMapping("/todos")
     public ResponseEntity<List<GrupoResponseDTO>> listarTodos() {
         List<GrupoResponseDTO> response = grupoService.listarTodos();
         return ResponseEntity.ok(response);
     }
 
-    // O parâmetro id numérico deve ficar abaixo das rotas nomeadas
     @GetMapping("/{id}")
     public ResponseEntity<GrupoResponseDTO> buscarPorId(@PathVariable Long id) {
         Usuario usuarioLogado = grupoService.obterUsuarioLogado();

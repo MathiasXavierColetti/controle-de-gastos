@@ -2,6 +2,7 @@ package com.mathias.coletti.controledegastos.controllers;
 
 import com.mathias.coletti.controledegastos.dtos.UsuarioAtualizacaoDTO;
 import com.mathias.coletti.controledegastos.dtos.UsuarioCadastroDTO;
+import com.mathias.coletti.controledegastos.dtos.UsuarioResetSenhaDTO;
 import com.mathias.coletti.controledegastos.dtos.UsuarioResponseDTO;
 import com.mathias.coletti.controledegastos.services.UsuarioService;
 import jakarta.validation.Valid;
@@ -15,6 +16,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/usuarios")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {
+        RequestMethod.GET,
+        RequestMethod.POST,
+        RequestMethod.PUT,
+        RequestMethod.DELETE,
+        RequestMethod.PATCH,
+        RequestMethod.OPTIONS
+})
 public class UsuarioController {
 
     private final UsuarioService usuarioService;
@@ -46,6 +55,14 @@ public class UsuarioController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletar(@PathVariable Long id) {
         usuarioService.deletar(id);
+        return ResponseEntity.noContent().build();
+    }
+    @PatchMapping("/{id}/reset-senha")
+    public ResponseEntity<Void> resetarSenha(
+            @PathVariable Long id,
+            @RequestBody @Valid UsuarioResetSenhaDTO dto
+    ) {
+        usuarioService.resetarSenha(id, dto.getNovaSenha());
         return ResponseEntity.noContent().build();
     }
 }

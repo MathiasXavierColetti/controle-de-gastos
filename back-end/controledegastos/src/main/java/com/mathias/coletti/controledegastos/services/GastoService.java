@@ -2,6 +2,7 @@ package com.mathias.coletti.controledegastos.services;
 
 import com.mathias.coletti.controledegastos.dtos.GastoRequestDTO;
 import com.mathias.coletti.controledegastos.dtos.GastoResponseDTO;
+import com.mathias.coletti.controledegastos.dtos.RelatorioGastoUsuarioDTO;
 import com.mathias.coletti.controledegastos.exceptions.ResourceNotFoundException;
 import com.mathias.coletti.controledegastos.models.Gasto;
 import com.mathias.coletti.controledegastos.models.Grupo;
@@ -13,12 +14,17 @@ import com.mathias.coletti.controledegastos.repositories.TipoDeGastoRepository;
 import com.mathias.coletti.controledegastos.repositories.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,13 +36,61 @@ public class GastoService {
     private final TipoDeGastoRepository tipoDeGastoRepository;
 
     private Usuario getUsuarioLogado() {
-        // Puxa o CPF que foi gravado na sessão do Spring Security pelo filtro
-        String cpfSessao = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        String cpfLimpo = (cpfSessao != null) ? cpfSessao.replaceAll("\\D", "") : "";
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AccessDeniedException("Usuário não autenticado.");
+        }
 
-        return usuarioRepository.findByPessoaCpf(cpfLimpo)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado para o CPF: " + cpfLimpo));
+        Object principal = authentication.getPrincipal();
+        String identificadorSessao;
+
+        // 1. Extração da informação crua da sessão
+        if (principal instanceof UserDetails userDetails) {
+            identificadorSessao = userDetails.getUsername();
+        } else if (principal instanceof String strPrincipal) {
+            identificadorSessao = strPrincipal;
+        } else {
+            identificadorSessao = authentication.getName();
+        }
+
+        if (identificadorSessao == null || identificadorSessao.isBlank()) {
+            throw new AccessDeniedException("Não foi possível identificar o usuário na sessão.");
+        }
+
+        String cpfLimpo = identificadorSessao.replaceAll("\\D", "");
+
+        // 2. Primeira Consulta: Tenta buscar diretamente pelo CPF
+        if (!cpfLimpo.isEmpty()) {
+            return usuarioRepository.findByPessoaCpf(cpfLimpo)
+                    .orElseGet(() -> buscarUsuarioPorOutroIdentificadorESegundaConsultaCpf(identificadorSessao));
+        }
+
+        // 3. Segunda Consulta (Fallback): Se a sessão continha outro identificador (ID ou Email)
+        return buscarUsuarioPorOutroIdentificadorESegundaConsultaCpf(identificadorSessao);
+    }
+
+    private Usuario buscarUsuarioPorOutroIdentificadorESegundaConsultaCpf(String identificadorSessao) {
+        // Consulta 1: Busca o usuário pelo ID ou outro parâmetro da sessão
+        Usuario usuarioTemp;
+        try {
+            Long usuarioId = Long.parseLong(identificadorSessao);
+            usuarioTemp = usuarioRepository.findById(usuarioId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado para o ID: " + usuarioId));
+        } catch (NumberFormatException e) {
+            throw new ResourceNotFoundException("Usuário não encontrado para o identificador da sessão: " + identificadorSessao);
+        }
+
+        // Garante a extração do CPF da pessoa vinculada
+        if (usuarioTemp.getPessoa() == null || usuarioTemp.getPessoa().getCpf() == null) {
+            throw new ResourceNotFoundException("Usuário encontrado, mas não possui CPF vinculado.");
+        }
+
+        String cpfExtraiDoUsuario = usuarioTemp.getPessoa().getCpf().replaceAll("\\D", "");
+
+        // Consulta 2 (Forçada por ordem): Consulta novamente o repositório utilizando EXCLUSIVAMENTE o CPF extraído
+        return usuarioRepository.findByPessoaCpf(cpfExtraiDoUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado na segunda consulta pelo CPF: " + cpfExtraiDoUsuario));
     }
 
     @Transactional(readOnly = true)
@@ -145,5 +199,35 @@ public class GastoService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public List<RelatorioGastoUsuarioDTO> obterRelatorioPizza(Long grupoId, LocalDate inicio, LocalDate fim, Long tipoDeGastoId) {
+        if (grupoId == null) {
+            throw new IllegalArgumentException("O ID do grupo é obrigatório para gerar o relatório.");
+        }
 
+        Usuario usuarioLogado = getUsuarioLogado();
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com ID: " + grupoId));
+        validarPertencimentoAoGrupo(usuarioLogado.getId(), grupo);
+
+        List<RelatorioGastoUsuarioDTO> resultados = gastoRepository.relatorioPorUsuarioEGrupo(grupoId, inicio, fim, tipoDeGastoId);
+
+        BigDecimal totalGeral = resultados.stream()
+                .map(RelatorioGastoUsuarioDTO::valorTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalGeral.compareTo(BigDecimal.ZERO) == 0) {
+            return List.of();
+        }
+
+        return resultados.stream()
+                .map(item -> {
+                    double porcentagem = item.valorTotal()
+                            .multiply(BigDecimal.valueOf(100))
+                            .divide(totalGeral, 2, RoundingMode.HALF_UP)
+                            .doubleValue();
+                    return new RelatorioGastoUsuarioDTO(item.usuario(), item.valorTotal(), porcentagem);
+                })
+                .collect(Collectors.toList());
+    }
 }

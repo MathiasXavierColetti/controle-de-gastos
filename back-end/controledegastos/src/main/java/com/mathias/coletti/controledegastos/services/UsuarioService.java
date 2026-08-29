@@ -9,7 +9,6 @@ import com.mathias.coletti.controledegastos.models.Pessoa;
 import com.mathias.coletti.controledegastos.models.Usuario;
 import com.mathias.coletti.controledegastos.repositories.PessoaRepository;
 import com.mathias.coletti.controledegastos.repositories.UsuarioRepository;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -109,6 +108,23 @@ public class UsuarioService {
                 usuario.getPessoa().getNome(),
                 usuario.getPessoa().getCpf()
         );
+    }
+
+    @Transactional
+    public void resetarSenha(Long id, String novaSenha) {
+        if (novaSenha == null || novaSenha.isBlank()) {
+            throw new BusinessException("A nova senha não pode ser vazia.");
+        }
+
+        if (novaSenha.length() < 6) {
+            throw new BusinessException("A nova senha deve ter no mínimo 6 caracteres.");
+        }
+
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado com o ID: " + id));
+
+        usuario.setSenha(passwordEncoder.encode(novaSenha));
+        usuarioRepository.save(usuario);
     }
 
     @Transactional

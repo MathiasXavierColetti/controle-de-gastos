@@ -12,11 +12,11 @@ import com.mathias.coletti.controledegastos.repositories.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,18 +28,12 @@ public class GrupoService {
     private final GrupoRepository grupoRepository;
     private final UsuarioRepository usuarioRepository;
 
-    /**
-     * Cria um novo grupo utilizando o usuário logado na sessão como criador.
-     */
     @Transactional
     public GrupoResponseDTO criarGrupo(GrupoCriacaoDTO dto) {
         Usuario criador = obterUsuarioLogado();
         return criarGrupo(criador.getId(), dto);
     }
 
-    /**
-     * Cria um grupo associando o usuário criador.
-     */
     @Transactional
     public GrupoResponseDTO criarGrupo(Long usuarioCriadorId, GrupoCriacaoDTO dto) {
         Usuario criador = usuarioRepository.findById(usuarioCriadorId)
@@ -51,7 +45,6 @@ public class GrupoService {
                 .usuarios(new HashSet<>())
                 .build();
 
-        // Adiciona o criador à lista de usuários do grupo
         grupo.getUsuarios().add(criador);
         criador.getGrupos().add(grupo);
 
@@ -80,7 +73,6 @@ public class GrupoService {
 
         validarPertencimentoAoGrupo(usuarioAutenticadoId, grupo);
 
-        // Remove os vínculos da tabela intermediária antes de deletar
         for (Usuario usuario : grupo.getUsuarios()) {
             usuario.getGrupos().remove(grupo);
         }
@@ -98,7 +90,8 @@ public class GrupoService {
 
         String cpfLimpo = dto.cpf().replaceAll("\\D", "");
 
-        Usuario novoMembro = usuarioRepository.findByPessoaCpf(cpfLimpo)
+        Usuario novoMembro = usuarioRepository.findByPessoaCpf(dto.cpf())
+                .or(() -> usuarioRepository.findByPessoaCpf(cpfLimpo))
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário com o CPF informado não foi encontrado."));
 
         if (grupo.getUsuarios().contains(novoMembro)) {
@@ -106,7 +99,7 @@ public class GrupoService {
         }
 
         grupo.getUsuarios().add(novoMembro);
-        novoMembro.getGrupos().add(grupo); // Mantém a consistência bidirecional
+        novoMembro.getGrupos().add(grupo);
 
         Grupo grupoAtualizado = grupoRepository.save(grupo);
         return converterParaDTO(grupoAtualizado);
@@ -150,7 +143,6 @@ public class GrupoService {
     @Transactional(readOnly = true)
     public List<GrupoResponseDTO> listarGruposDoUsuarioLogado() {
         Usuario usuario = obterUsuarioLogado();
-
         List<Grupo> grupos = grupoRepository.findByUsuariosId(usuario.getId());
 
         return grupos.stream()
@@ -167,30 +159,65 @@ public class GrupoService {
     }
 
     /**
-     * Recupera a entidade Usuario referente ao usuário atualmente autenticado via JWT (por CPF).
+     * Recupera o usuário logado convertendo diretamente o 'sub' do token (auth.getName()) para Long,
+     * uma vez que o token armazena o ID do usuário no subject.
      */
     public Usuario obterUsuarioLogado() {
-        org.springframework.security.core.Authentication auth =
-                SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth == null || !auth.isAuthenticated()) {
             throw new AccessDeniedException("Usuário não está autenticado.");
         }
 
-        String cpf = auth.getName(); // Método padrão e seguro para obter a identificação do usuário
-        String cpfLimpo = cpf.replaceAll("\\D", "");
+        Object principal = auth.getPrincipal();
+        Long usuarioId = null;
 
-        // Busca primeiro pelo CPF exatamente como veio no token, e se não achar, busca pelo CPF sem pontuação
-        return usuarioRepository.findByPessoaCpf(cpf)
-                .or(() -> usuarioRepository.findByPessoaCpf(cpfLimpo))
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado para o CPF: " + cpf));
+        // 1. Caso o principal já seja do tipo Long (ex: gerado por um filtro customizado)
+        if (principal instanceof Long id) {
+            usuarioId = id;
+        }
+        // 2. Caso o principal seja do tipo String (ex: "1" vindo de um JWT comum)
+        else if (principal instanceof String str) {
+            try {
+                usuarioId = Long.parseLong(str);
+            } catch (NumberFormatException ignored) {
+                // Se for CPF em formato String
+                String cpfLimpo = str.replaceAll("\\D", "");
+                return usuarioRepository.findByPessoaCpf(str)
+                        .or(() -> usuarioRepository.findByPessoaCpf(cpfLimpo))
+                        .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado para o CPF: " + str));
+            }
+        }
+        // 3. Fallback usando auth.getName() sem fazer cast forçado de String
+        else if (auth.getName() != null) {
+            String name = auth.getName();
+            try {
+                usuarioId = Long.parseLong(name);
+            } catch (NumberFormatException e) {
+                String cpfLimpo = name.replaceAll("\\D", "");
+                return usuarioRepository.findByPessoaCpf(name)
+                        .or(() -> usuarioRepository.findByPessoaCpf(cpfLimpo))
+                        .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado: " + name));
+            }
+        }
+
+        // Se identificamos o ID do usuário, faz a busca direta por ID
+        if (usuarioId != null) {
+            Long idBusca = usuarioId;
+            return usuarioRepository.findById(idBusca)
+                    .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado com o ID: " + idBusca));
+        }
+
+        throw new AccessDeniedException("Não foi possível identificar o usuário no token de autenticação.");
     }
 
     private void validarPertencimentoAoGrupo(Long usuarioId, Grupo grupo) {
         boolean pertence = grupo.getUsuarios().stream()
                 .anyMatch(u -> u.getId().equals(usuarioId));
 
-
+        if (!pertence) {
+            throw new AccessDeniedException("Acesso negado: O usuário não pertence a este grupo.");
+        }
     }
 
     private GrupoResponseDTO converterParaDTO(Grupo grupo) {
