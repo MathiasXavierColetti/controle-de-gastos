@@ -26,7 +26,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Habilita o CORS buscando automaticamente o bean CorsConfigurationSource gerenciado pelo Spring
+                // Habilita o CORS buscando automaticamente o bean CorsConfigurationSource
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -36,6 +36,9 @@ public class SecurityConfig {
 
                         // LIBERA A ROTA DE ERRO INTERNO DO SPRING
                         .requestMatchers("/error").permitAll()
+
+                        // LIBERA O HEALTH CHECK PARA O CRON-JOB / RENDER
+                        .requestMatchers("/health").permitAll()
 
                         // Endpoints Públicos (Autenticação, Swagger e H2 Console)
                         .requestMatchers("/api/v1/auth/**").permitAll()
