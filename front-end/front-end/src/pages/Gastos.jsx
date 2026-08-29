@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
     Container, Row, Col, Card, Form, Button, Table,
     Alert, Spinner, Modal, Badge, ProgressBar
@@ -188,7 +188,7 @@ export default function Gastos() {
 
     return (
         <div className="bg-light min-vh-100 pb-5">
-            <NavbarComponent />
+            <NavbarComponent/>
 
             <Container className="py-4">
                 {/* Cabeçalho */}
@@ -200,7 +200,7 @@ export default function Gastos() {
                     <Button
                         onClick={abrirModalCriar}
                         className="py-2 px-4 fw-semibold rounded-3 border-0 shadow-sm"
-                        style={{ backgroundColor: '#7c3aed' }}
+                        style={{backgroundColor: '#7c3aed'}}
                         disabled={grupos.length === 0}
                     >
                         + Novo Gasto
@@ -208,8 +208,10 @@ export default function Gastos() {
                 </div>
 
                 {/* Notificações */}
-                {error && <Alert variant="danger" dismissible onClose={() => setError('')} className="py-2 rounded-3 shadow-sm">{error}</Alert>}
-                {success && <Alert variant="success" dismissible onClose={() => setSuccess('')} className="py-2 rounded-3 shadow-sm">{success}</Alert>}
+                {error && <Alert variant="danger" dismissible onClose={() => setError('')}
+                                 className="py-2 rounded-3 shadow-sm">{error}</Alert>}
+                {success && <Alert variant="success" dismissible onClose={() => setSuccess('')}
+                                   className="py-2 rounded-3 shadow-sm">{success}</Alert>}
 
                 {/* Filtros */}
                 <Card className="border-0 shadow-sm p-4 rounded-4 mb-4">
@@ -273,7 +275,7 @@ export default function Gastos() {
                             <Button
                                 onClick={carregarRelatorio}
                                 className="w-100 rounded-3 border-0 py-2 fw-semibold"
-                                style={{ backgroundColor: '#6d28d9' }}
+                                style={{backgroundColor: '#6d28d9'}}
                             >
                                 Filtrar
                             </Button>
@@ -293,9 +295,12 @@ export default function Gastos() {
                 {Object.keys(gastosPorTipo).length > 0 && (
                     <Card className="border-0 shadow-sm p-4 rounded-4 mb-4">
                         <div className="d-flex justify-content-between align-items-center mb-3">
-                            <h5 className="fw-bold mb-0" style={{ color: '#6d28d9' }}>Distribuição de Gastos</h5>
-                            <Badge bg="primary" className="fs-6 px-3 py-2" style={{ backgroundColor: '#7c3aed' }}>
-                                Total: R$ {valorTotalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <h5 className="fw-bold mb-0" style={{color: '#6d28d9'}}>Distribuição de Gastos</h5>
+                            <Badge bg="primary" className="fs-6 px-3 py-2" style={{backgroundColor: '#7c3aed'}}>
+                                Total: R$ {valorTotalGeral.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                            })}
                             </Badge>
                         </div>
                         <div className="d-flex flex-column gap-3">
@@ -303,15 +308,19 @@ export default function Gastos() {
                                 const percentual = valorTotalGeral > 0 ? (totalCategoria / valorTotalGeral) * 100 : 0;
                                 return (
                                     <div key={idx}>
-                                        <div className="d-flex justify-content-between small fw-semibold text-secondary mb-1">
+                                        <div
+                                            className="d-flex justify-content-between small fw-semibold text-secondary mb-1">
                                             <span>{tipo}</span>
                                             <span>
-                                                R$ {totalCategoria.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({percentual.toFixed(1)}%)
+                                                R$ {totalCategoria.toLocaleString('pt-BR', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2
+                                            })} ({percentual.toFixed(1)}%)
                                             </span>
                                         </div>
                                         <ProgressBar
                                             now={percentual}
-                                            style={{ height: '8px', backgroundColor: '#f1f5f9' }}
+                                            style={{height: '8px', backgroundColor: '#f1f5f9'}}
                                             className="rounded-pill"
                                         />
                                     </div>
@@ -324,7 +333,7 @@ export default function Gastos() {
                 {/* Tabela de Lançamentos */}
                 {loading ? (
                     <div className="text-center py-5">
-                        <Spinner animation="border" style={{ color: '#7c3aed' }} />
+                        <Spinner animation="border" style={{color: '#7c3aed'}}/>
                     </div>
                 ) : gastos.length === 0 ? (
                     <Card className="border-0 shadow-sm p-5 rounded-4 text-center">
@@ -358,7 +367,10 @@ export default function Gastos() {
                                         </td>
                                         <td className="text-secondary">{gasto.usuarioNome}</td>
                                         <td className="fw-bold text-danger">
-                                            R$ {Number(gasto.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            R$ {Number(gasto.valor).toLocaleString('pt-BR', {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2
+                                        })}
                                         </td>
                                         <td className="text-end pe-4">
                                             <Button
@@ -389,7 +401,7 @@ export default function Gastos() {
                 {/* Modal de Criação / Edição */}
                 <Modal show={showModal} onHide={fecharModal} centered>
                     <Modal.Header closeButton className="border-0 pb-0">
-                        <Modal.Title className="fw-bold" style={{ color: '#6d28d9' }}>
+                        <Modal.Title className="fw-bold" style={{color: '#6d28d9'}}>
                             {editandoId ? 'Editar Gasto' : 'Novo Gasto'}
                         </Modal.Title>
                     </Modal.Header>
@@ -455,7 +467,8 @@ export default function Gastos() {
                             <Button variant="secondary" onClick={fecharModal} className="rounded-3">
                                 Cancelar
                             </Button>
-                            <Button type="submit" className="rounded-3 border-0 px-4" style={{ backgroundColor: '#7c3aed' }}>
+                            <Button type="submit" className="rounded-3 border-0 px-4"
+                                    style={{backgroundColor: '#7c3aed'}}>
                                 {editandoId ? 'Salvar Alterações' : 'Cadastrar Gasto'}
                             </Button>
                         </Modal.Footer>
