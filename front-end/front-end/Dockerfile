@@ -1,5 +1,5 @@
-# Etapa 1: Build do projeto Vite/React
-FROM node:18-alpine AS build
+# Etapa 1: Build do projeto Vite/React usando Node 20
+FROM node:22-alpine AS build
 WORKDIR /app
 
 # Copia as dependências e instala
@@ -10,8 +10,8 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Etapa 2: Servir a aplicação com Node e o pacote 'serve'
-FROM node:18-alpine
+# Etapa 2: Servir a aplicação com Node 20 e o pacote 'serve'
+FROM node:20-alpine
 WORKDIR /app
 
 # Instala um servidor estático global leve
