@@ -12,7 +12,7 @@ RUN mvn dependency:go-offline -B
 
 # 3. Copia o código-fonte e realiza o build do JAR
 COPY src ./src
-RUN mvn clean package -DskipTests
+RUN mvn clean package -DskipTests -Dproject.build.sourceEncoding=UTF-8
 
 # ===================================================================
 # ETAPA 2: Runtime (Imagem enxuta para execução)
