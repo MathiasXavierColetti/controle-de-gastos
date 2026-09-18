@@ -230,4 +230,48 @@ public class GastoService {
                 })
                 .collect(Collectors.toList());
     }
+    @Transactional(readOnly = true)
+    public List<RelatorioGastoUsuarioDTO> obterRelatorioPizzaComFiltroUsuario(
+            Long grupoId,
+            LocalDate inicio,
+            LocalDate fim,
+            Long tipoDeGastoId,
+            Long usuarioId) { // <-- Novo campo/parâmetro adicionado aqui
+
+        if (grupoId == null) {
+            throw new IllegalArgumentException("O ID do grupo é obrigatório para gerar o relatório.");
+        }
+
+        Usuario usuarioLogado = getUsuarioLogado();
+
+        Grupo grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Grupo não encontrado com ID: " + grupoId));
+
+        validarPertencimentoAoGrupo(usuarioLogado.getId(), grupo);
+
+        // Chama o método do repositório passando o novo parâmetro usuarioId
+        List<RelatorioGastoUsuarioDTO> resultados = gastoRepository.relatorioPorUsuarioEGrupo(
+                grupoId, inicio, fim, tipoDeGastoId, usuarioId
+        );
+
+        BigDecimal totalGeral = resultados.stream()
+                .map(RelatorioGastoUsuarioDTO::valorTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalGeral.compareTo(BigDecimal.ZERO) == 0) {
+            return List.of();
+        }
+
+        return resultados.stream()
+                .map(item -> {
+                    double porcentagem = item.valorTotal()
+                            .multiply(BigDecimal.valueOf(100))
+                            .divide(totalGeral, 2, RoundingMode.HALF_UP)
+                            .doubleValue();
+
+                    // Retorna o DTO exatamente como era antes
+                    return new RelatorioGastoUsuarioDTO(item.usuario(), item.valorTotal(), porcentagem);
+                })
+                .collect(Collectors.toList());
+    }
 }

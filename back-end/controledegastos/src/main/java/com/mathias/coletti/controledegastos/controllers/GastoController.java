@@ -72,4 +72,19 @@ public class GastoController {
         List<RelatorioGastoUsuarioDTO> relatorio = gastoService.obterRelatorioPizza(grupoId, inicio, fim, tipoDeGastoId);
         return ResponseEntity.ok(relatorio);
     }
+    // --- NOVO ENDPOINT AQUI ---
+    @GetMapping("/relatorio-pizza/usuario")
+    public ResponseEntity<List<RelatorioGastoUsuarioDTO>> obterRelatorioPizzaComFiltroUsuario(
+            @RequestParam Long grupoId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim,
+            @RequestParam(required = false) Long tipoDeGastoId,
+            @RequestParam(required = false) Long usuarioId // Novo parâmetro opcional
+    ) {
+        List<RelatorioGastoUsuarioDTO> relatorio = gastoService.obterRelatorioPizzaComFiltroUsuario(
+                grupoId, inicio, fim, tipoDeGastoId, usuarioId
+        );
+        return ResponseEntity.ok(relatorio);
+    }
+
 }

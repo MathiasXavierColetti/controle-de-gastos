@@ -57,4 +57,21 @@ public interface GastoRepository extends JpaRepository<Gasto, Long>, JpaSpecific
             @Param("fim") LocalDate fim,
             @Param("tipoDeGastoId") Long tipoDeGastoId
     );
+    @Query("SELECT new com.mathias.coletti.controledegastos.dtos.RelatorioGastoUsuarioDTO(" +
+            "u.pessoa.nome, SUM(g.valor)) " +
+            "FROM Gasto g JOIN g.usuario u " +
+            "WHERE g.grupo.id = :grupoId " +
+            "AND (cast(:inicio as java.time.LocalDate) IS NULL OR g.data >= :inicio) " +
+            "AND (cast(:fim as java.time.LocalDate) IS NULL OR g.data <= :fim) " +
+            "AND (:tipoDeGastoId IS NULL OR g.tipoDeGasto.id = :tipoDeGastoId) " +
+            "AND (:usuarioId IS NULL OR u.id = :usuarioId) " +
+            "GROUP BY u.pessoa.nome " +
+            "ORDER BY SUM(g.valor) DESC")
+    List<RelatorioGastoUsuarioDTO> relatorioPorUsuarioEGrupo(
+            @Param("grupoId") Long grupoId,
+            @Param("inicio") LocalDate inicio,
+            @Param("fim") LocalDate fim,
+            @Param("tipoDeGastoId") Long tipoDeGastoId,
+            @Param("usuarioId") Long usuarioId
+    );
 }
